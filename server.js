@@ -152,7 +152,7 @@ function startServer() {
   const args = MC_START_CMD.split(' ');
   const cmd = args.shift();
 
-  mcProcess = spawn(cmd, args, { cwd: MC_DIR });
+  mcProcess = spawn(cmd, args, { cwd: MC_DIR, env: { ...process.env, PATH: process.env.PATH + ':/usr/bin:/usr/local/bin' } });
 
   mcProcess.stdout.on('data', data => {
     const text = data.toString();
