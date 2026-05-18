@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MC Panel</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/yaml/yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/properties/properties.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/toml/toml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/addon/edit/matchbrackets.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#161b22;--bg3:#1c2128;--bg4:#21262d;--border:#30363d;
+  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
+  --green:#3fb950;--yellow:#d29922;--red:#f85149;--orange:#f0883e;--blue:#58a6ff;--cyan:#39d353;
+  --purple:#bc8cff;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+
+/* TOP BAR */
+#topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap;min-height:52px;position:relative;z-index:100}
+#server-name{font-weight:700;font-size:15px;cursor:pointer;padding:2px 4px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--text);min-width:80px}
+#server-name:focus{outline:none;border-color:var(--blue);background:var(--bg3)}
+.badge{padding:3px 8px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
+.badge.online{background:#1a3a1a;color:var(--green)}
+.badge.offline{background:#2a1a1a;color:var(--red)}
+.badge.starting{background:#2a2a1a;color:var(--yellow)}
+.badge.crashed{background:#2a1a0a;color:var(--orange)}
+.btn{padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:opacity 0.15s}
+.btn:hover{opacity:0.85}.btn:disabled{opacity:0.4;cursor:not-allowed}
+.btn-green{background:#1f6731;color:#fff}
+.btn-red{background:#6e1c1c;color:#fff}
+.btn-blue{background:#1a3a5e;color:#fff}
+.btn-gray{background:var(--bg4);color:var(--text);border:1px solid var(--border)}
+#tps-badge{font-size:12px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap}
+#lag-badge{display:none;background:var(--red);color:#fff;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:700;animation:blink 0.8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+#stats-display{font-size:12px;color:var(--text2);display:flex;gap:8px;flex-wrap:wrap}
+#stats-display span{white-space:nowrap}
+#playit-indicator{display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot.green{background:var(--green)}.dot.red{background:var(--red)}
+#player-count{font-size:12px;color:var(--text2);white-space:nowrap}
+.topbar-spacer{flex:1}
+
+/* LAYOUT */
+#app{display:flex;flex-direction:column;height:100vh}
+#tabs{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto}
+.tab-btn{padding:10px 16px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid transparent;white-space:nowrap;transition:color 0.15s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--blue);border-bottom-color:var(--blue)}
+#content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.tab-panel{display:none;flex:1;overflow:hidden;flex-direction:column}
+.tab-panel.active{display:flex}
+
+/* CONSOLE TAB */
+#console-tab{flex-direction:row;overflow:hidden}
+#console-main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#graphs-panel{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px}
+#graphs-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;font-weight:600;color:var(--text2)}
+#graphs-toggle{background:none;border:1px solid var(--border);color:var(--text2);cursor:pointer;padding:2px 8px;border-radius:4px;font-size:11px}
+#graphs-body{display:flex;gap:8px}
+.graph-wrap{flex:1;min-width:0}
+.graph-label{font-size:11px;color:var(--text3);margin-bottom:2px}
+canvas.graph{width:100%;height:60px;display:block;background:var(--bg3);border-radius:4px}
+#log-subtabs{display:flex;gap:4px;padding:6px 8px;background:var(--bg3);border-bottom:1px solid var(--border)}
+.subtab-btn{padding:3px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:500;background:transparent;color:var(--text2)}
+.subtab-btn.active{background:var(--bg4);color:var(--text)}
+#log-viewer{flex:1;overflow-y:auto;padding:6px 8px;font-family:'Courier New',monospace;font-size:12px;line-height:1.5;background:var(--bg);position:relative}
+#chat-viewer{display:none;flex:1;overflow-y:auto;padding:8px;background:var(--bg)}
+.chat-msg{display:flex;align-items:flex-start;gap:8px;padding:4px 6px;border-radius:6px;margin-bottom:2px;background:var(--bg3)}
+.chat-msg img{width:20px;height:20px;border-radius:3px;flex-shrink:0}
+.chat-meta{font-size:11px;color:var(--text3);margin-left:auto;white-space:nowrap}
+.log-error{color:#f85149}.log-warn{color:#d29922}.log-join{color:#3fb950}.log-chat{color:#39d353;background:rgba(57,211,83,0.05)}.log-info{color:var(--text2)}
+#log-controls{display:flex;gap:6px;padding:4px 8px;background:var(--bg3);border-top:1px solid var(--border);align-items:center}
+#clear-log-btn{font-size:12px}
+#console-input-wrap{display:flex;gap:6px;padding:8px;background:var(--bg2);border-top:1px solid var(--border);position:relative}
+#console-input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-family:monospace;font-size:13px}
+#console-input:focus{outline:none;border-color:var(--blue)}
+#broadcast-wrap{display:flex;gap:6px;padding:8px;background:var(--bg2);border-top:1px solid var(--border)}
+#broadcast-input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px}
+#broadcast-input:focus{outline:none;border-color:var(--blue)}
+#broadcast-wrap label{font-size:12px;color:var(--text2);align-self:center;white-space:nowrap}
+
+/* HISTORY DROPDOWN */
+#history-dropdown{position:absolute;bottom:100%;right:0;background:var(--bg3);border:1px solid var(--border);border-radius:6px;min-width:300px;max-height:240px;overflow-y:auto;z-index:200;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.5)}
+#history-dropdown.open{display:block}
+.history-item{padding:6px 10px;cursor:pointer;font-family:monospace;font-size:12px;color:var(--text2)}
+.history-item:hover{background:var(--bg4);color:var(--text)}
+
+/* PLAYERS SIDEBAR */
+#players-sidebar{width:220px;border-left:1px solid var(--border);background:var(--bg2);display:flex;flex-direction:column;flex-shrink:0}
+#players-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
+#players-list{flex:1;overflow-y:auto;padding:6px}
+.player-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:6px;margin-bottom:2px;background:var(--bg3)}
+.player-row img{width:24px;height:24px;border-radius:3px}
+.player-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player-actions{display:flex;gap:3px}
+.player-btn{padding:2px 6px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:500}
+.pb-kick{background:#3a1a1a;color:#f85149}
+.pb-ban{background:#3a1500;color:#f0883e}
+.pb-op{background:#1a2a3a;color:#58a6ff}
+#sidebar-toggle{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px}
+
+/* FILES TAB */
+#files-tab{flex-direction:row}
+#file-tree-panel{width:300px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--bg2);flex-shrink:0;position:relative}
+#file-tree-header{padding:8px;border-bottom:1px solid var(--border)}
+#file-search{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px}
+#file-search:focus{outline:none;border-color:var(--blue)}
+#quick-access{display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border)}
+.qa-btn{padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg3);color:var(--text2);cursor:pointer;font-size:11px}
+.qa-btn:hover{background:var(--bg4);color:var(--text)}
+#breadcrumb{padding:4px 8px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.bc-seg{cursor:pointer;color:var(--blue)}
+.bc-seg:hover{text-decoration:underline}
+#file-tree-header2{display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--border)}
+#file-tree{flex:1;overflow-y:auto;padding:4px}
+.tree-item{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:5px;cursor:pointer;font-size:12px;position:relative;user-select:none}
+.tree-item:hover{background:var(--bg4)}
+.tree-item.selected{background:var(--bg3);color:var(--blue)}
+.tree-item input.rename-input{flex:1;background:var(--bg3);border:1px solid var(--blue);color:var(--text);padding:1px 4px;border-radius:3px;font-size:12px}
+.tree-item input.rename-input:focus{outline:none}
+.tree-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.tree-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-actions{display:none;gap:3px;flex-shrink:0}
+.tree-item:hover .tree-actions{display:flex}
+.tree-action-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:1px 2px;border-radius:3px;line-height:1}
+.tree-action-btn:hover{color:var(--text);background:var(--bg3)}
+.tree-item .check-box{width:14px;height:14px;flex-shrink:0}
+#drop-overlay{display:none;position:absolute;inset:0;background:rgba(88,166,255,0.15);border:2px dashed var(--blue);border-radius:6px;z-index:50;pointer-events:none;flex-direction:column;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--blue)}
+#drop-overlay.active{display:flex}
+#upload-progress{padding:6px 8px;border-top:1px solid var(--border);display:none;font-size:12px}
+.upload-item{display:flex;justify-content:space-between;margin-bottom:3px}
+.prog-bar{height:4px;background:var(--bg3);border-radius:2px;margin-top:2px}
+.prog-fill{height:100%;background:var(--blue);border-radius:2px;transition:width 0.2s}
+
+/* CONTEXT MENU */
+#ctx-menu{position:fixed;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 0;z-index:500;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.5);min-width:150px}
+.ctx-item{padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2)}
+.ctx-item:hover{background:var(--bg4);color:var(--text)}
+
+/* FILE EDITOR */
+#file-editor-panel{flex:1;display:flex;flex-direction:column;min-width:0}
+#editor-header{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg2)}
+#editor-filename{font-weight:600;font-size:13px}
+#editor-path{font-size:11px;color:var(--text3)}
+#unsaved-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);display:none}
+#unsaved-label{font-size:11px;color:var(--orange);display:none}
+#editor-save-btn{margin-left:auto}
+#editor-wrap{flex:1;overflow:auto;position:relative}
+#editor-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:14px}
+.CodeMirror{height:100%;font-size:13px;font-family:'Courier New',monospace}
+.CodeMirror-scroll{height:100%}
+
+/* PROPERTIES TAB */
+#props-tab{overflow-y:auto;padding:20px}
+.props-form{max-width:700px;margin:0 auto}
+.props-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+.props-section h3{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text2)}
+.prop-row{display:flex;align-items:center;margin-bottom:10px;gap:12px}
+.prop-label{width:200px;font-size:13px;color:var(--text2);flex-shrink:0}
+.prop-input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px}
+.prop-input:focus{outline:none;border-color:var(--blue)}
+.prop-toggle{display:flex;align-items:center;gap:6px}
+.toggle-sw{appearance:none;width:36px;height:20px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;position:relative;transition:background 0.2s}
+.toggle-sw:checked{background:#1f6731;border-color:var(--green)}
+.toggle-sw::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left 0.2s}
+.toggle-sw:checked::after{left:18px}
+.slider-wrap{display:flex;align-items:center;gap:8px;flex:1}
+.prop-slider{flex:1;accent-color:var(--blue)}
+.slider-val{min-width:28px;text-align:right;font-size:13px;color:var(--text2)}
+#props-save-btn{margin-top:8px}
+#props-toast{display:none;margin-top:8px;padding:8px 12px;background:var(--bg3);border:1px solid var(--green);border-radius:6px;color:var(--green);font-size:13px}
+
+/* MANAGEMENT TAB */
+#mgmt-tab{overflow-y:auto;padding:16px}
+.mgmt-subtabs{display:flex;gap:6px;margin-bottom:16px}
+.mgmt-content{display:none}.mgmt-content.active{display:block}
+.player-table{width:100%;border-collapse:collapse;font-size:13px}
+.player-table th{text-align:left;padding:6px 10px;background:var(--bg3);color:var(--text2);border-bottom:1px solid var(--border)}
+.player-table td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.player-table tr:hover td{background:var(--bg3)}
+.mgmt-avatar{width:24px;height:24px;border-radius:3px}
+.add-row{display:flex;gap:8px;margin-bottom:12px}
+.add-row input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px}
+.add-row input:focus{outline:none;border-color:var(--blue)}
+
+/* MODS TAB */
+#mods-tab{overflow-y:auto;padding:16px}
+#mod-search-form{display:flex;gap:8px;margin-bottom:16px}
+#mod-search-input{flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:13px}
+#mod-search-input:focus{outline:none;border-color:var(--blue)}
+#mod-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:24px}
+.mod-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;gap:10px}
+.mod-icon{width:48px;height:48px;border-radius:6px;object-fit:cover;flex-shrink:0;background:var(--bg3)}
+.mod-info{flex:1;min-width:0}
+.mod-name{font-weight:600;font-size:13px;margin-bottom:3px}
+.mod-desc{font-size:12px;color:var(--text2);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:6px}
+.mod-meta{font-size:11px;color:var(--text3)}
+.mod-install-btn{margin-top:6px}
+#installed-mods{margin-top:8px}
+#installed-mods h3{font-size:14px;font-weight:600;margin-bottom:10px;color:var(--text2)}
+.installed-mod-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:var(--bg2);border:1px solid var(--border);margin-bottom:6px;font-size:13px}
+.installed-mod-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.installed-mod-size{font-size:11px;color:var(--text3)}
+
+/* BACKUPS TAB */
+#backups-tab{overflow-y:auto;padding:16px}
+#backup-btn-wrap{margin-bottom:16px;display:flex;align-items:center;gap:12px}
+#backup-progress-wrap{display:none;flex:1;max-width:300px}
+#backup-progress-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden}
+#backup-progress-fill{height:100%;background:var(--blue);border-radius:3px;transition:width 0.3s}
+#backup-progress-label{font-size:12px;color:var(--text2);margin-top:3px}
+.backup-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:var(--bg2);border:1px solid var(--border);margin-bottom:6px;font-size:13px}
+.backup-name{flex:1;font-family:monospace}
+.backup-size{font-size:11px;color:var(--text3)}
+.backup-date{font-size:11px;color:var(--text3)}
+
+/* SETTINGS TAB */
+#settings-tab{overflow-y:auto;padding:20px}
+.settings-section{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;max-width:600px}
+.settings-section h3{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text2)}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.setting-row:last-child{border-bottom:none}
+.setting-label{font-size:13px}
+.setting-sub{font-size:11px;color:var(--text3);margin-top:2px}
+.time-input{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:13px;width:90px}
+.time-input:focus{outline:none;border-color:var(--blue)}
+#next-restart-label{font-size:12px;color:var(--text2);margin-top:6px}
+
+/* MODAL */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center}
+#modal-overlay.open{display:flex}
+#modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:24px;min-width:300px;max-width:480px}
+#modal-title{font-size:16px;font-weight:600;margin-bottom:10px}
+#modal-body{font-size:14px;color:var(--text2);margin-bottom:16px}
+#modal-actions{display:flex;justify-content:flex-end;gap:8px}
+#modal-input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:13px;margin-bottom:12px}
+#modal-input:focus{outline:none;border-color:var(--blue)}
+
+/* MULTI-SELECT BAR */
+#multiselect-bar{display:none;align-items:center;gap:8px;padding:6px 8px;background:var(--bg3);border-bottom:1px solid var(--border);font-size:13px}
+#multiselect-bar.active{display:flex}
+
+/* TOAST */
+#toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;z-index:2000;opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+
+/* MOBILE */
+@media(max-width:700px){
+  #topbar{gap:5px;padding:6px 8px}
+  #stats-display{display:none}
+  #tabs{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);border-bottom:none;z-index:100;justify-content:space-around}
+  .tab-btn{padding:8px 6px;font-size:11px;border-bottom:none;border-top:2px solid transparent;flex:1;text-align:center}
+  .tab-btn.active{border-top-color:var(--blue);border-bottom:none}
+  #content{margin-bottom:50px}
+  #files-tab{flex-direction:column}
+  #file-tree-panel{width:100%;height:40%;border-right:none;border-bottom:1px solid var(--border)}
+  #players-sidebar{width:100%;height:160px;border-left:none;border-top:1px solid var(--border)}
+  #console-tab{flex-direction:column}
+  #graphs-body{flex-direction:column}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+<!-- TOP BAR -->
+<div id="topbar">
+  <input id="server-name" value="Minecraft Server" title="Click to edit server name">
+  <span id="status-badge" class="badge offline">Offline</span>
+  <span id="lag-badge">LAG</span>
+  <button class="btn btn-green" id="start-btn" onclick="serverAction('start')">Start</button>
+  <button class="btn btn-red" id="stop-btn" onclick="serverAction('stop')" disabled>Stop</button>
+  <button class="btn btn-blue" id="restart-btn" onclick="serverAction('restart')" disabled>Restart</button>
+  <span id="player-count">0/? players</span>
+  <span id="tps-badge" style="background:#1a3a1a;color:#3fb950">TPS --</span>
+  <div id="stats-display">
+    <span id="stat-cpu">CPU --%</span>
+    <span id="stat-ram">RAM --</span>
+    <span id="stat-disk">Disk --</span>
+  </div>
+  <div id="playit-indicator">
+    <span>🌐</span>
+    <span class="dot red" id="playit-dot"></span>
+    <span id="playit-addr">playit.gg</span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div id="tabs">
+  <button class="tab-btn active" onclick="switchTab('console')">Console</button>
+  <button class="tab-btn" onclick="switchTab('files')">Files</button>
+  <button class="tab-btn" onclick="switchTab('props')">Properties</button>
+  <button class="tab-btn" onclick="switchTab('mgmt')">Management</button>
+  <button class="tab-btn" onclick="switchTab('mods')">Mods</button>
+  <button class="tab-btn" onclick="switchTab('backups')">Backups</button>
+  <button class="tab-btn" onclick="switchTab('settings')">Settings</button>
+</div>
+
+<div id="content">
+
+<!-- CONSOLE TAB -->
+<div id="console-tab" class="tab-panel active">
+  <div id="console-main">
+    <!-- Graphs -->
+    <div id="graphs-panel">
+      <div id="graphs-header">
+        <span>Performance</span>
+        <button id="graphs-toggle" onclick="toggleGraphs()">▼ Collapse</button>
+      </div>
+      <div id="graphs-body">
+        <div class="graph-wrap"><div class="graph-label">CPU %</div><canvas id="graph-cpu" class="graph"></canvas></div>
+        <div class="graph-wrap"><div class="graph-label">RAM (GB)</div><canvas id="graph-ram" class="graph"></canvas></div>
+        <div class="graph-wrap"><div class="graph-label">TPS</div><canvas id="graph-tps" class="graph"></canvas></div>
+      </div>
+    </div>
+    <!-- Log sub-tabs -->
+    <div id="log-subtabs">
+      <button class="subtab-btn active" onclick="switchLogTab('log')">Full Log</button>
+      <button class="subtab-btn" onclick="switchLogTab('chat')">Chat Only</button>
+    </div>
+    <!-- Log viewer -->
+    <div id="log-viewer"></div>
+    <!-- Chat viewer -->
+    <div id="chat-viewer"></div>
+    <!-- Log controls -->
+    <div id="log-controls">
+      <button class="btn btn-gray" id="clear-log-btn" onclick="clearLog()" style="font-size:12px;padding:3px 8px">Clear</button>
+    </div>
+    <!-- Broadcast (shown in chat tab) -->
+    <div id="broadcast-wrap" style="display:none">
+      <label for="broadcast-input">Broadcast:</label>
+      <input id="broadcast-input" placeholder="Broadcast to all players" onkeydown="if(event.key==='Enter')sendBroadcast()">
+      <button class="btn btn-blue" onclick="sendBroadcast()" style="font-size:12px;padding:5px 10px">Send</button>
+    </div>
+    <!-- Console input -->
+    <div id="console-input-wrap">
+      <input id="console-input" placeholder="Enter command..." onkeydown="handleConsoleKey(event)">
+      <button class="btn btn-gray" style="font-size:12px;padding:5px 8px" onclick="toggleHistory()">History</button>
+      <button class="btn btn-blue" style="font-size:12px;padding:5px 10px" onclick="sendConsole()">Send</button>
+      <div id="history-dropdown"></div>
+    </div>
+  </div>
+  <!-- Players sidebar -->
+  <div id="players-sidebar">
+    <div id="players-header">
+      <span>Players <span id="online-count">0</span></span>
+      <button id="sidebar-toggle" onclick="toggleSidebar()" title="Collapse">◀</button>
+    </div>
+    <div id="players-list"></div>
+  </div>
+</div>
+
+<!-- FILES TAB -->
+<div id="files-tab" class="tab-panel">
+  <div id="file-tree-panel">
+    <div id="file-tree-header">
+      <input id="file-search" placeholder="Search files..." oninput="searchFiles(this.value)">
+    </div>
+    <div id="quick-access"></div>
+    <div id="breadcrumb"></div>
+    <div id="file-tree-header2">
+      <span style="font-size:11px;color:var(--text3)">Files</span>
+      <div style="display:flex;gap:4px">
+        <span id="multiselect-count" style="font-size:11px;color:var(--text3);align-self:center"></span>
+        <button class="btn btn-gray" style="font-size:11px;padding:2px 6px" onclick="showNewFolder()">+ Folder</button>
+        <button id="bulk-delete-btn" class="btn btn-red" style="font-size:11px;padding:2px 6px;display:none" onclick="bulkDelete()">Delete Selected</button>
+      </div>
+    </div>
+    <div id="file-tree"></div>
+    <div id="drop-overlay"><div>Drop files here</div><div id="drop-target-label" style="font-size:12px;margin-top:4px"></div></div>
+    <div id="upload-progress"></div>
+  </div>
+  <div id="file-editor-panel">
+    <div id="editor-header">
+      <span id="editor-filename" style="color:var(--text2)">No file open</span>
+      <span id="unsaved-dot"></span>
+      <span id="unsaved-label">Unsaved changes</span>
+      <span id="editor-path" style="flex:1;padding-left:8px"></span>
+      <button class="btn btn-blue" id="editor-save-btn" onclick="saveFile()" disabled style="font-size:12px;padding:4px 10px">Save</button>
+    </div>
+    <div id="editor-wrap">
+      <div id="editor-empty">Select a file to edit</div>
+      <textarea id="editor-textarea" style="display:none"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- PROPERTIES TAB -->
+<div id="props-tab" class="tab-panel">
+  <div class="props-form">
+    <h2 style="margin-bottom:16px;font-size:16px">server.properties</h2>
+    <div class="props-section" id="props-known">
+      <h3>Common Settings</h3>
+      <div class="prop-row"><span class="prop-label">max-players</span><input type="number" class="prop-input" id="prop-max-players" min="1" max="1000"></div>
+      <div class="prop-row"><span class="prop-label">difficulty</span><select class="prop-input" id="prop-difficulty"><option>peaceful</option><option>easy</option><option>normal</option><option>hard</option></select></div>
+      <div class="prop-row"><span class="prop-label">gamemode</span><select class="prop-input" id="prop-gamemode"><option>survival</option><option>creative</option><option>adventure</option><option>spectator</option></select></div>
+      <div class="prop-row"><span class="prop-label">motd</span><input type="text" class="prop-input" id="prop-motd"></div>
+      <div class="prop-row"><span class="prop-label">pvp</span><div class="prop-toggle"><input type="checkbox" class="toggle-sw" id="prop-pvp"></div></div>
+      <div class="prop-row"><span class="prop-label">white-list</span><div class="prop-toggle"><input type="checkbox" class="toggle-sw" id="prop-whitelist"></div></div>
+      <div class="prop-row"><span class="prop-label">online-mode</span><div class="prop-toggle"><input type="checkbox" class="toggle-sw" id="prop-online-mode"></div></div>
+      <div class="prop-row"><span class="prop-label">view-distance</span><div class="slider-wrap"><input type="range" class="prop-slider" id="prop-view-distance" min="2" max="32" oninput="document.getElementById('vd-val').textContent=this.value"><span class="slider-val" id="vd-val">10</span></div></div>
+      <div class="prop-row"><span class="prop-label">simulation-distance</span><div class="slider-wrap"><input type="range" class="prop-slider" id="prop-sim-distance" min="2" max="32" oninput="document.getElementById('sd-val').textContent=this.value"><span class="slider-val" id="sd-val">10</span></div></div>
+    </div>
+    <div class="props-section" id="props-other-wrap">
+      <h3>Other Settings</h3>
+      <div id="props-other"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-blue" id="props-save-btn" onclick="saveProps()">Save Properties</button>
+      <div id="props-toast">Saved!</div>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGEMENT TAB -->
+<div id="mgmt-tab" class="tab-panel">
+  <div class="mgmt-subtabs">
+    <button class="btn btn-gray active" onclick="switchMgmtTab('whitelist',this)">Whitelist</button>
+    <button class="btn btn-gray" onclick="switchMgmtTab('ops',this)">Ops</button>
+    <button class="btn btn-gray" onclick="switchMgmtTab('banned',this)">Banned</button>
+  </div>
+
+  <div id="mgmt-whitelist" class="mgmt-content active">
+    <div class="add-row"><input id="wl-add-input" placeholder="Player name..."><button class="btn btn-green" onclick="wlAdd()">Add</button><button class="btn btn-gray" onclick="loadMgmt('whitelist')">Reload</button></div>
+    <table class="player-table"><thead><tr><th></th><th>Username</th><th>UUID</th><th>Action</th></tr></thead><tbody id="wl-body"></tbody></table>
+  </div>
+  <div id="mgmt-ops" class="mgmt-content">
+    <div class="add-row"><input id="ops-add-input" placeholder="Player name..."><button class="btn btn-green" onclick="opsAdd()">Op</button><button class="btn btn-gray" onclick="loadMgmt('ops')">Reload</button></div>
+    <table class="player-table"><thead><tr><th></th><th>Username</th><th>UUID</th><th>Level</th><th>Action</th></tr></thead><tbody id="ops-body"></tbody></table>
+  </div>
+  <div id="mgmt-banned" class="mgmt-content">
+    <button class="btn btn-gray" onclick="loadMgmt('banned')" style="margin-bottom:10px">Reload</button>
+    <table class="player-table"><thead><tr><th></th><th>Username</th><th>UUID</th><th>Reason</th><th>Date</th><th>Action</th></tr></thead><tbody id="banned-body"></tbody></table>
+  </div>
+</div>
+
+<!-- MODS TAB -->
+<div id="mods-tab" class="tab-panel">
+  <form id="mod-search-form" onsubmit="searchMods(event)">
+    <input id="mod-search-input" placeholder="Search Modrinth for plugins...">
+    <button class="btn btn-blue" type="submit">Search</button>
+  </form>
+  <div id="mod-results"></div>
+  <div id="installed-mods"><h3>Installed Mods</h3><div id="installed-list"></div></div>
+</div>
+
+<!-- BACKUPS TAB -->
+<div id="backups-tab" class="tab-panel">
+  <div id="backup-btn-wrap">
+    <button class="btn btn-blue" onclick="startBackup()">Backup Now</button>
+    <div id="backup-progress-wrap">
+      <div id="backup-progress-bar"><div id="backup-progress-fill" style="width:0%"></div></div>
+      <div id="backup-progress-label">0%</div>
+    </div>
+  </div>
+  <div id="backup-list"></div>
+</div>
+
+<!-- SETTINGS TAB -->
+<div id="settings-tab" class="tab-panel">
+  <div class="settings-section">
+    <h3>Scheduled Restart</h3>
+    <div class="setting-row">
+      <div><div class="setting-label">Enable daily restart</div></div>
+      <input type="checkbox" class="toggle-sw" id="sched-enabled" onchange="saveSettings()">
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Restart time</div><div class="setting-sub">24-hour format</div></div>
+      <input type="time" class="time-input" id="sched-time" value="04:00" onchange="saveSettings()">
+    </div>
+    <div id="next-restart-label"></div>
+  </div>
+  <div class="settings-section">
+    <h3>Auto-Backup</h3>
+    <div class="setting-row">
+      <div><div class="setting-label">Backup before restart</div></div>
+      <input type="checkbox" class="toggle-sw" id="auto-backup-toggle" onchange="saveSettings()">
+    </div>
+  </div>
+  <div class="settings-section">
+    <h3>Crash Recovery</h3>
+    <div class="setting-row">
+      <div><div class="setting-label">Auto-restart on crash</div><div class="setting-sub">Pauses after 3 crashes in 5 min</div></div>
+      <input type="checkbox" class="toggle-sw" id="auto-restart-toggle" checked onchange="saveSettings()">
+    </div>
+  </div>
+  <div class="settings-section">
+    <h3>Notifications</h3>
+    <div class="setting-row"><div class="setting-label">Server crash</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="crash" checked></div>
+    <div class="setting-row"><div class="setting-label">Player join</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="join" checked></div>
+    <div class="setting-row"><div class="setting-label">Backup complete</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="backup" checked></div>
+    <div class="setting-row"><div class="setting-label">Restart warning</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="restart_warn" checked></div>
+    <div class="setting-row"><div class="setting-label">TPS lag alert</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="lag" checked></div>
+    <div class="setting-row"><div class="setting-label">Tunnel disconnect</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="tunnel_down" checked></div>
+    <button class="btn btn-gray" style="margin-top:10px;font-size:12px" onclick="requestNotifPerms()">Test / Request Permission</button>
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /app -->
+
+<!-- MODAL -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div id="modal-title"></div>
+    <div id="modal-body"></div>
+    <input id="modal-input" style="display:none">
+    <div id="modal-actions">
+      <button class="btn btn-gray" id="modal-cancel-btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-blue" id="modal-ok-btn">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+  <div class="ctx-item" id="ctx-zip">Compress to zip</div>
+  <div class="ctx-item" id="ctx-unzip">Extract here</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const state = {
+  status: 'offline',
+  players: [],
+  tps: null,
+  currentPath: '',
+  openFile: null,
+  unsaved: false,
+  cmdHistory: [],
+  cmdHistIdx: -1,
+  cmdDraft: '',
+  logPaused: false,
+  logSubTab: 'log',
+  graphsCollapsed: false,
+  sidebarCollapsed: false,
+  selectedItems: new Set(),
+  ctxTarget: null,
+  config: {},
+  notifSettings: { crash:true, join:true, backup:true, restart_warn:true, lag:true, tunnel_down:true }
+};
+
+// Graph buffers
+const graphs = { cpu: [], ram: [], tps: [] };
+let cmEditor = null;
+
+// ─── WEBSOCKET ───────────────────────────────────────────────────────────────
+const ws = new WebSocket(`ws://${location.host}`);
+ws.onmessage = e => {
+  const msg = JSON.parse(e.data);
+  switch (msg.type) {
+    case 'log': appendLog(msg.data); break;
+    case 'status': updateStatus(msg.status); break;
+    case 'crashed':
+      updateStatus('crashed');
+      appendLog(`[PANEL] Server crashed (exit code ${msg.exitCode}). ${msg.restarting ? 'Restarting in 10 seconds...' : ''}\n`, 'error');
+      fireNotif('crash', `Server crashed — ${msg.restarting ? 'auto-restarting in 10 seconds.' : 'auto-restart is disabled.'}`);
+      break;
+    case 'players': updatePlayers(msg.players); break;
+    case 'tps': updateTps(msg.value); break;
+    case 'stats': updateStats(msg); break;
+    case 'backup_progress':
+      document.getElementById('backup-progress-wrap').style.display = 'block';
+      document.getElementById('backup-progress-fill').style.width = msg.percent + '%';
+      document.getElementById('backup-progress-label').textContent = msg.percent + '%';
+      break;
+    case 'backup_done':
+      document.getElementById('backup-progress-fill').style.width = '100%';
+      document.getElementById('backup-progress-label').textContent = 'Done!';
+      setTimeout(() => document.getElementById('backup-progress-wrap').style.display = 'none', 3000);
+      loadBackups();
+      break;
+    case 'playit': updatePlayit(msg); break;
+    case 'notification': fireNotif(msg.event, msg.message); break;
+  }
+};
+ws.onclose = () => appendLog('[PANEL] WebSocket disconnected. Reload to reconnect.\n', 'error');
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+async function init() {
+  // Load config
+  const cfg = await api('/api/config');
+  state.config = cfg;
+  state.cmdHistory = cfg.commandHistory || [];
+  document.getElementById('server-name').value = cfg.serverName || 'Minecraft Server';
+  document.getElementById('sched-enabled').checked = !!cfg.scheduledRestartEnabled;
+  document.getElementById('sched-time').value = cfg.scheduledRestartTime || '04:00';
+  document.getElementById('auto-backup-toggle').checked = !!cfg.autoBackupOnRestart;
+  document.getElementById('auto-restart-toggle').checked = cfg.autoRestart !== false;
+
+  // Notification settings from localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem('notif-settings') || '{}');
+    state.notifSettings = { ...state.notifSettings, ...saved };
+  } catch {}
+  document.querySelectorAll('.notif-toggle').forEach(el => {
+    el.checked = state.notifSettings[el.dataset.event] !== false;
+    el.onchange = () => {
+      state.notifSettings[el.dataset.event] = el.checked;
+      localStorage.setItem('notif-settings', JSON.stringify(state.notifSettings));
+    };
+  });
+
+  // Quick access buttons
+  const qa = document.getElementById('quick-access');
+  ['mods','config','plugins','world','backups'].forEach(dir => {
+    const btn = document.createElement('button');
+    btn.className = 'qa-btn';
+    btn.textContent = dir;
+    btn.onclick = () => { state.currentPath = dir; loadFileTree(dir); };
+    qa.appendChild(btn);
+  });
+
+  // Server name editing
+  const nameEl = document.getElementById('server-name');
+  nameEl.onblur = () => { state.config.serverName = nameEl.value; saveConfigField('serverName', nameEl.value); };
+  nameEl.onkeydown = e => { if (e.key === 'Enter') nameEl.blur(); };
+
+  // Drag & drop upload
+  setupDropZone();
+
+  // Context menu
+  document.addEventListener('click', () => document.getElementById('ctx-menu').style.display = 'none');
+  document.getElementById('ctx-zip').onclick = () => ctxAction('zip');
+  document.getElementById('ctx-unzip').onclick = () => ctxAction('unzip');
+
+  // Fetch initial graph data
+  const gd = await api('/api/graph-data');
+  if (gd.cpu) graphs.cpu = gd.cpu;
+  if (gd.ram) graphs.ram = gd.ram;
+  if (gd.tps) graphs.tps = gd.tps;
+  drawGraphs();
+
+  // Load file tree
+  loadFileTree('');
+  updateNextRestart();
+
+  // Request notification permission
+  if ('Notification' in window && localStorage.getItem('notif-asked') !== '1') {
+    Notification.requestPermission();
+    localStorage.setItem('notif-asked', '1');
+  }
+}
+
+// ─── API HELPER ──────────────────────────────────────────────────────────────
+async function api(url, opts = {}) {
+  const r = await fetch(url, opts);
+  return r.json().catch(() => ({}));
+}
+
+// ─── STATUS ──────────────────────────────────────────────────────────────────
+function updateStatus(s) {
+  state.status = s;
+  const badge = document.getElementById('status-badge');
+  badge.className = `badge ${s}`;
+  const labels = { online:'Online', offline:'Offline', starting:'Starting...', crashed:'Crashed' };
+  badge.textContent = labels[s] || s;
+  document.getElementById('start-btn').disabled = s === 'online' || s === 'starting';
+  document.getElementById('stop-btn').disabled = s === 'offline';
+  document.getElementById('restart-btn').disabled = s === 'offline';
+  if (s === 'offline' || s === 'crashed') {
+    document.getElementById('player-count').textContent = '0/? players';
+  }
+}
+
+async function serverAction(action) {
+  if (action === 'stop' || action === 'restart') {
+    if (!await confirm2(`${action.charAt(0).toUpperCase()+action.slice(1)} the server?`)) return;
+  }
+  await api(`/api/server/${action}`, { method: 'POST' });
+}
+
+// ─── PLAYERS ─────────────────────────────────────────────────────────────────
+function updatePlayers(players) {
+  state.players = players;
+  document.getElementById('player-count').textContent = `${players.length}/? players`;
+  document.getElementById('online-count').textContent = players.length;
+  const list = document.getElementById('players-list');
+  list.innerHTML = '';
+  players.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'player-row';
+    row.innerHTML = `<img src="https://mc-heads.net/avatar/${p}/24" alt="${p}" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\'><rect width=\'24\' height=\'24\' fill=\'%23555\'/></svg>'">
+      <span class="player-name">${escHtml(p)}</span>
+      <div class="player-actions">
+        <button class="player-btn pb-kick" onclick="playerCmd('kick','${escHtml(p)}')">Kick</button>
+        <button class="player-btn pb-ban" onclick="playerBan('${escHtml(p)}')">Ban</button>
+        <button class="player-btn pb-op" onclick="playerCmd('op','${escHtml(p)}')">Op</button>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+async function playerCmd(cmd, name) {
+  await api('/api/console', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ command: `${cmd} ${name}` }) });
+}
+
+async function playerBan(name) {
+  if (!await confirm2(`Ban player ${name}?`)) return;
+  playerCmd('ban', name);
+}
+
+// ─── TPS ─────────────────────────────────────────────────────────────────────
+function updateTps(v) {
+  state.tps = v;
+  const badge = document.getElementById('tps-badge');
+  badge.textContent = `TPS ${v.toFixed(1)}`;
+  if (v >= 18) { badge.style.background='#1a3a1a'; badge.style.color='#3fb950'; }
+  else if (v >= 15) { badge.style.background='#2a2a1a'; badge.style.color='#d29922'; }
+  else { badge.style.background='#2a1a1a'; badge.style.color='#f85149'; }
+  document.getElementById('lag-badge').style.display = v < 15 ? '' : 'none';
+  graphs.tps.push({ t: Date.now(), v });
+  if (graphs.tps.length > 100) graphs.tps.shift();
+  drawGraph('tps');
+}
+
+// ─── STATS ───────────────────────────────────────────────────────────────────
+function updateStats(msg) {
+  document.getElementById('stat-cpu').textContent = `CPU ${msg.cpu}`;
+  document.getElementById('stat-ram').textContent = `RAM ${msg.ram}`;
+  document.getElementById('stat-disk').textContent = `Disk ${msg.disk}`;
+  const cpuNum = parseInt(msg.cpu);
+  const ramNum = parseFloat(msg.ram);
+  graphs.cpu.push({ t: Date.now(), v: cpuNum });
+  graphs.ram.push({ t: Date.now(), v: ramNum });
+  if (graphs.cpu.length > 100) graphs.cpu.shift();
+  if (graphs.ram.length > 100) graphs.ram.shift();
+  drawGraph('cpu'); drawGraph('ram');
+}
+
+// ─── PLAYIT ──────────────────────────────────────────────────────────────────
+function updatePlayit(msg) {
+  document.getElementById('playit-dot').className = `dot ${msg.connected ? 'green' : 'red'}`;
+  document.getElementById('playit-addr').textContent = msg.address || (msg.connected ? 'Connected' : 'Disconnected');
+}
+
+// ─── GRAPHS ──────────────────────────────────────────────────────────────────
+function drawGraph(key) {
+  const canvas = document.getElementById(`graph-${key}`);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  canvas.width = W; canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#1c2128';
+  ctx.fillRect(0, 0, W, H);
+  const data = graphs[key];
+  if (!data.length) return;
+  const vals = data.map(d => d.v);
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (key === 'tps') { min = 0; max = 20; }
+  if (max === min) max = min + 1;
+  const pad = 4;
+  const scaleY = v => H - pad - (v - min) / (max - min) * (H - pad * 2);
+
+  // TPS threshold line at 15
+  if (key === 'tps') {
+    const y = scaleY(15);
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = '#f85149';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const x = pad + (i / (data.length - 1 || 1)) * (W - pad * 2);
+    const y = scaleY(d.v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  const colors = { cpu: '#58a6ff', ram: '#bc8cff', tps: '#3fb950' };
+  ctx.strokeStyle = colors[key];
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function drawGraphs() { ['cpu','ram','tps'].forEach(drawGraph); }
+
+function toggleGraphs() {
+  state.graphsCollapsed = !state.graphsCollapsed;
+  document.getElementById('graphs-body').style.display = state.graphsCollapsed ? 'none' : 'flex';
+  document.getElementById('graphs-toggle').textContent = state.graphsCollapsed ? '▶ Expand' : '▼ Collapse';
+}
+
+// ─── LOG VIEWER ──────────────────────────────────────────────────────────────
+const CHAT_RE = /<(\w+)> (.+)/;
+
+function appendLog(text, forceClass) {
+  const viewer = document.getElementById('log-viewer');
+  const lines = text.split('\n');
+  lines.forEach(line => {
+    if (!line.trim()) return;
+    const div = document.createElement('div');
+    div.textContent = line;
+    let cls = 'log-info';
+    if (forceClass) cls = 'log-' + forceClass;
+    else if (/\[ERROR\]|Exception|SEVERE/i.test(line)) cls = 'log-error';
+    else if (/\[WARN\]/i.test(line)) cls = 'log-warn';
+    else if (/logged in/.test(line)) cls = 'log-join';
+    else if (CHAT_RE.test(line)) cls = 'log-chat';
+    div.className = cls;
+    viewer.appendChild(div);
+
+    // Chat extraction
+    const chatMatch = line.match(CHAT_RE);
+    if (chatMatch) appendChat(chatMatch[1], chatMatch[2], line);
+  });
+  if (!state.logPaused) viewer.scrollTop = viewer.scrollHeight;
+}
+
+function appendChat(player, msg, rawLine) {
+  const cv = document.getElementById('chat-viewer');
+  const now = new Date();
+  const ts = now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+  div.innerHTML = `<img src="https://mc-heads.net/avatar/${escHtml(player)}/20" alt="${escHtml(player)}" onerror="this.style.display='none'">
+    <span><b>${escHtml(player)}</b> ${escHtml(msg)}</span>
+    <span class="chat-meta">${ts}</span>`;
+  cv.appendChild(div);
+  if (!state.logPaused) cv.scrollTop = cv.scrollHeight;
+}
+
+// Pause on manual scroll
+document.getElementById('log-viewer').addEventListener('scroll', function() {
+  const el = this;
+  state.logPaused = el.scrollTop + el.clientHeight < el.scrollHeight - 20;
+});
+document.getElementById('chat-viewer').addEventListener('scroll', function() {
+  const el = this;
+  state.logPaused = el.scrollTop + el.clientHeight < el.scrollHeight - 20;
+});
+
+function clearLog() {
+  document.getElementById('log-viewer').innerHTML = '';
+  document.getElementById('chat-viewer').innerHTML = '';
+}
+
+function switchLogTab(tab) {
+  state.logSubTab = tab;
+  document.querySelectorAll('.subtab-btn').forEach((b, i) => b.classList.toggle('active', i === (tab === 'log' ? 0 : 1)));
+  document.getElementById('log-viewer').style.display = tab === 'log' ? '' : 'none';
+  document.getElementById('chat-viewer').style.display = tab === 'chat' ? '' : 'none';
+  document.getElementById('broadcast-wrap').style.display = tab === 'chat' ? '' : 'none';
+  document.getElementById('console-input-wrap').style.display = tab === 'log' ? '' : 'none';
+  document.getElementById('log-controls').style.display = '';
+}
+
+// ─── CONSOLE INPUT ───────────────────────────────────────────────────────────
+function handleConsoleKey(e) {
+  const input = document.getElementById('console-input');
+  if (e.key === 'Enter') { sendConsole(); return; }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (state.cmdHistIdx === -1) state.cmdDraft = input.value;
+    if (state.cmdHistIdx < state.cmdHistory.length - 1) {
+      state.cmdHistIdx++;
+      input.value = state.cmdHistory[state.cmdHistory.length - 1 - state.cmdHistIdx];
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (state.cmdHistIdx > 0) {
+      state.cmdHistIdx--;
+      input.value = state.cmdHistory[state.cmdHistory.length - 1 - state.cmdHistIdx];
+    } else if (state.cmdHistIdx === 0) {
+      state.cmdHistIdx = -1;
+      input.value = state.cmdDraft;
+    }
+  }
+}
+
+async function sendConsole() {
+  const input = document.getElementById('console-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  state.cmdHistIdx = -1;
+  await api('/api/console', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ command: cmd }) });
+  state.cmdHistory = [...new Set([...state.cmdHistory, cmd])].slice(-50);
+}
+
+async function sendBroadcast() {
+  const input = document.getElementById('broadcast-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  await api('/api/console', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ command: `say ${msg}` }) });
+}
+
+function toggleHistory() {
+  const dd = document.getElementById('history-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) renderHistoryDropdown();
+}
+
+function renderHistoryDropdown() {
+  const dd = document.getElementById('history-dropdown');
+  dd.innerHTML = '';
+  const hist = [...state.cmdHistory].reverse();
+  hist.slice(0, 20).forEach(cmd => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.textContent = cmd;
+    div.onclick = () => {
+      document.getElementById('console-input').value = cmd;
+      dd.classList.remove('open');
+    };
+    dd.appendChild(div);
+  });
+}
+
+function toggleSidebar() {
+  state.sidebarCollapsed = !state.sidebarCollapsed;
+  const sb = document.getElementById('players-sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  if (state.sidebarCollapsed) {
+    sb.style.width = '36px';
+    document.getElementById('players-list').style.display = 'none';
+    document.querySelector('#players-header span').style.display = 'none';
+    btn.textContent = '▶';
+  } else {
+    sb.style.width = '220px';
+    document.getElementById('players-list').style.display = '';
+    document.querySelector('#players-header span').style.display = '';
+    btn.textContent = '◀';
+  }
+}
+
+// ─── FILE TREE ───────────────────────────────────────────────────────────────
+async function loadFileTree(dir) {
+  state.currentPath = dir;
+  state.selectedItems.clear();
+  document.getElementById('bulk-delete-btn').style.display = 'none';
+  updateBreadcrumb(dir);
+  const items = await api(`/api/files?path=${encodeURIComponent(dir)}`);
+  renderFileTree(items, dir);
+}
+
+function updateBreadcrumb(dir) {
+  const bc = document.getElementById('breadcrumb');
+  bc.innerHTML = '';
+  const root = document.createElement('span');
+  root.className = 'bc-seg';
+  root.textContent = 'minecraft';
+  root.onclick = () => loadFileTree('');
+  bc.appendChild(root);
+  if (dir) {
+    const parts = dir.split('/').filter(Boolean);
+    let acc = '';
+    parts.forEach((p, i) => {
+      bc.appendChild(document.createTextNode(' / '));
+      const seg = document.createElement('span');
+      acc += (acc ? '/' : '') + p;
+      const captured = acc;
+      seg.className = 'bc-seg';
+      seg.textContent = p;
+      seg.onclick = () => loadFileTree(captured);
+      bc.appendChild(seg);
+    });
+  }
+}
+
+function getFileIcon(name, isDir) {
+  if (isDir) return '📁';
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (ext === 'jar') return '🧩';
+  if (['toml','json','cfg','properties','yml','yaml'].includes(ext)) return '⚙️';
+  if (['txt','log'].includes(ext)) return '📄';
+  if (ext === 'zip') return '🗜️';
+  return '📄';
+}
+
+function renderFileTree(items, dir) {
+  const tree = document.getElementById('file-tree');
+  tree.innerHTML = '';
+  if (!items || items.error) {
+    tree.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px">${items && items.error || 'Error loading'}</div>`;
+    return;
+  }
+  items.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'tree-item';
+    row.dataset.path = item.path;
+    row.dataset.isDir = item.isDir;
+    row.innerHTML = `
+      <input type="checkbox" class="check-box" onclick="event.stopPropagation();toggleSelect('${escHtml(item.path)}',this)">
+      <span class="tree-icon">${getFileIcon(item.name, item.isDir)}</span>
+      <span class="tree-name">${escHtml(item.name)}</span>
+      <div class="tree-actions">
+        <button class="tree-action-btn" title="Rename" onclick="event.stopPropagation();startRename(this,'${escHtml(item.path)}','${escHtml(item.name)}')">✏️</button>
+        <button class="tree-action-btn" title="Delete" onclick="event.stopPropagation();deleteItem('${escHtml(item.path)}',${item.isDir})">🗑️</button>
+        <button class="tree-action-btn" title="Download" onclick="event.stopPropagation();downloadFile('${escHtml(item.path)}')">⬇️</button>
+      </div>`;
+    if (item.isDir) {
+      row.onclick = () => loadFileTree(item.path);
+    } else {
+      row.onclick = () => openFile(item.path, item.name);
+      row.oncontextmenu = e => { e.preventDefault(); showCtxMenu(e, item); };
+    }
+    if (item.isDir) {
+      row.oncontextmenu = e => { e.preventDefault(); showCtxMenu(e, item); };
+    }
+    tree.appendChild(row);
+  });
+}
+
+function toggleSelect(path, cb) {
+  if (cb.checked) state.selectedItems.add(path);
+  else state.selectedItems.delete(path);
+  const n = state.selectedItems.size;
+  document.getElementById('bulk-delete-btn').style.display = n > 0 ? '' : 'none';
+  document.getElementById('multiselect-count').textContent = n > 0 ? `${n} selected` : '';
+}
+
+async function bulkDelete() {
+  if (!state.selectedItems.size) return;
+  if (!await confirm2(`Delete ${state.selectedItems.size} items?`)) return;
+  for (const p of state.selectedItems) {
+    const isDir = document.querySelector(`[data-path="${CSS.escape(p)}"]`)?.dataset.isDir === 'true';
+    await api(`/api/${isDir ? 'dir' : 'file'}?path=${encodeURIComponent(p)}`, { method: 'DELETE' });
+  }
+  state.selectedItems.clear();
+  loadFileTree(state.currentPath);
+}
+
+async function deleteItem(path, isDir) {
+  if (!await confirm2(`Delete ${path.split('/').pop()}?`)) return;
+  const r = await api(`/api/${isDir ? 'dir' : 'file'}?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+  if (r.error) toast('Delete failed: ' + r.error);
+  else toast('Deleted');
+  loadFileTree(state.currentPath);
+}
+
+function downloadFile(path) {
+  window.location = `/api/download?path=${encodeURIComponent(path)}`;
+}
+
+function startRename(btn, path, name) {
+  const row = btn.closest('.tree-item');
+  const nameEl = row.querySelector('.tree-name');
+  const input = document.createElement('input');
+  input.className = 'rename-input';
+  input.value = name;
+  input.onclick = e => e.stopPropagation();
+  nameEl.replaceWith(input);
+  input.focus(); input.select();
+  const doRename = async () => {
+    const newName = input.value.trim();
+    if (!newName || newName === name) { loadFileTree(state.currentPath); return; }
+    const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
+    const to = dir ? `${dir}/${newName}` : newName;
+    await api('/api/rename', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ from: path, to }) });
+    loadFileTree(state.currentPath);
+  };
+  input.onblur = doRename;
+  input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); doRename(); } if (e.key === 'Escape') loadFileTree(state.currentPath); };
+}
+
+function showNewFolder() {
+  modal('New Folder', 'Folder name:', null, async name => {
+    if (!name) return;
+    const p = state.currentPath ? `${state.currentPath}/${name}` : name;
+    await api('/api/mkdir', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ path: p }) });
+    loadFileTree(state.currentPath);
+  }, true);
+}
+
+function showCtxMenu(e, item) {
+  state.ctxTarget = item;
+  const menu = document.getElementById('ctx-menu');
+  document.getElementById('ctx-zip').style.display = item.name.endsWith('.zip') ? 'none' : '';
+  document.getElementById('ctx-unzip').style.display = item.name.endsWith('.zip') ? '' : 'none';
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+}
+
+async function ctxAction(action) {
+  const item = state.ctxTarget;
+  if (!item) return;
+  if (action === 'zip') {
+    const destName = item.name + '.zip';
+    const dest = state.currentPath ? `${state.currentPath}/${destName}` : destName;
+    await api('/api/zip', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ paths: [item.path], dest }) });
+    toast('Compressed!');
+    loadFileTree(state.currentPath);
+  } else if (action === 'unzip') {
+    await api('/api/unzip', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ path: item.path, dest: state.currentPath }) });
+    toast('Extracted!');
+    loadFileTree(state.currentPath);
+  }
+}
+
+async function searchFiles(q) {
+  if (!q.trim()) { loadFileTree(state.currentPath); return; }
+  const results = await api(`/api/search?q=${encodeURIComponent(q)}`);
+  const tree = document.getElementById('file-tree');
+  tree.innerHTML = '';
+  if (!results.length) { tree.innerHTML = '<div style="color:var(--text2);font-size:12px;padding:8px">No results</div>'; return; }
+  results.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'tree-item';
+    row.innerHTML = `<span class="tree-icon">📄</span><span class="tree-name">${escHtml(p)}</span>`;
+    row.onclick = () => {
+      const parts = p.split('/');
+      const name = parts.pop();
+      openFile(p, name);
+    };
+    tree.appendChild(row);
+  });
+}
+
+// ─── FILE EDITOR ─────────────────────────────────────────────────────────────
+async function openFile(filePath, name) {
+  if (state.unsaved) {
+    if (!await confirm2('You have unsaved changes. Open another file?')) return;
+  }
+  const { content, error } = await api(`/api/file?path=${encodeURIComponent(filePath)}`);
+  if (error) { toast('Error: ' + error); return; }
+  state.openFile = filePath;
+  state.unsaved = false;
+  document.getElementById('editor-filename').textContent = name;
+  document.getElementById('editor-path').textContent = filePath;
+  document.getElementById('unsaved-dot').style.display = 'none';
+  document.getElementById('unsaved-label').style.display = 'none';
+  document.getElementById('editor-save-btn').disabled = false;
+  document.getElementById('editor-empty').style.display = 'none';
+
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const modeMap = { json:'javascript', js:'javascript', yaml:'yaml', yml:'yaml', properties:'properties', toml:'toml' };
+  const mode = modeMap[ext] || 'text/plain';
+
+  if (cmEditor) {
+    cmEditor.toTextArea();
+    cmEditor = null;
+  }
+  const ta = document.getElementById('editor-textarea');
+  ta.value = content;
+  ta.style.display = '';
+  cmEditor = CodeMirror.fromTextArea(ta, {
+    mode, lineNumbers: true, theme: 'default',
+    matchBrackets: true, lineWrapping: false
+  });
+  cmEditor.getWrapperElement().style.height = '100%';
+  cmEditor.on('change', () => {
+    if (!state.unsaved) {
+      state.unsaved = true;
+      document.getElementById('unsaved-dot').style.display = 'inline-block';
+      document.getElementById('unsaved-label').style.display = 'inline';
+    }
+  });
+
+  // Dark theme override
+  const wrapper = cmEditor.getWrapperElement();
+  wrapper.style.background = '#0d1117';
+  wrapper.style.color = '#e6edf3';
+  wrapper.style.height = '100%';
+  cmEditor.refresh();
+}
+
+async function saveFile() {
+  if (!state.openFile) return;
+  const content = cmEditor ? cmEditor.getValue() : document.getElementById('editor-textarea').value;
+  const result = await api('/api/file', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ path: state.openFile, content }) });
+  if (result.ok) {
+    state.unsaved = false;
+    document.getElementById('unsaved-dot').style.display = 'none';
+    document.getElementById('unsaved-label').style.display = 'none';
+    toast('File saved');
+  } else toast('Save failed: ' + (result.error || 'unknown'));
+}
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveFile(); }
+});
+
+// ─── DROP ZONE ───────────────────────────────────────────────────────────────
+function setupDropZone() {
+  const panel = document.getElementById('file-tree-panel');
+  const overlay = document.getElementById('drop-overlay');
+  const targetLabel = document.getElementById('drop-target-label');
+
+  panel.addEventListener('dragover', e => {
+    e.preventDefault();
+    overlay.classList.add('active');
+    targetLabel.textContent = `Drop into: minecraft/${state.currentPath}`;
+  });
+  panel.addEventListener('dragleave', e => {
+    if (!panel.contains(e.relatedTarget)) overlay.classList.remove('active');
+  });
+  panel.addEventListener('drop', async e => {
+    e.preventDefault();
+    overlay.classList.remove('active');
+    const files = Array.from(e.dataTransfer.files);
+    if (!files.length) return;
+    const prog = document.getElementById('upload-progress');
+    prog.style.display = 'block';
+    prog.innerHTML = '';
+    for (const file of files) {
+      const bar = document.createElement('div');
+      bar.className = 'upload-item';
+      bar.innerHTML = `<span>${escHtml(file.name)}</span><span id="up-st-${escHtml(file.name.replace(/[^a-z0-9]/gi,'_'))}">Uploading...</span>`;
+      const pb = document.createElement('div'); pb.className = 'prog-bar';
+      const pf = document.createElement('div'); pf.className = 'prog-fill'; pb.appendChild(pf);
+      prog.appendChild(bar); prog.appendChild(pb);
+
+      const fd = new FormData();
+      fd.append('files', file);
+      try {
+        await new Promise((res, rej) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/upload?path=${encodeURIComponent(state.currentPath)}`);
+          xhr.upload.onprogress = ev => {
+            if (ev.lengthComputable) pf.style.width = Math.round(ev.loaded/ev.total*100) + '%';
+          };
+          xhr.onload = () => { pf.style.width='100%'; res(); };
+          xhr.onerror = rej;
+          xhr.send(fd);
+        });
+        bar.querySelector(`[id^="up-st-"]`).textContent = '✓ Done';
+      } catch {
+        bar.querySelector(`[id^="up-st-"]`).textContent = '✗ Failed';
+      }
+    }
+    setTimeout(() => { prog.style.display = 'none'; prog.innerHTML = ''; }, 3000);
+    loadFileTree(state.currentPath);
+  });
+}
+
+// ─── SERVER.PROPERTIES ───────────────────────────────────────────────────────
+let propsRaw = {};
+
+async function loadProps() {
+  const { content } = await api('/api/file?path=server.properties');
+  if (!content) return;
+  propsRaw = {};
+  const knownKeys = ['max-players','difficulty','gamemode','motd','pvp','white-list','online-mode','view-distance','simulation-distance'];
+  const lines = content.split('\n');
+  lines.forEach(line => {
+    if (line.startsWith('#') || !line.includes('=')) return;
+    const [k, ...rest] = line.split('=');
+    propsRaw[k.trim()] = rest.join('=');
+  });
+  document.getElementById('prop-max-players').value = propsRaw['max-players'] || 20;
+  document.getElementById('prop-difficulty').value = propsRaw['difficulty'] || 'easy';
+  document.getElementById('prop-gamemode').value = propsRaw['gamemode'] || 'survival';
+  document.getElementById('prop-motd').value = propsRaw['motd'] || '';
+  document.getElementById('prop-pvp').checked = propsRaw['pvp'] !== 'false';
+  document.getElementById('prop-whitelist').checked = propsRaw['white-list'] === 'true';
+  document.getElementById('prop-online-mode').checked = propsRaw['online-mode'] !== 'false';
+  const vd = parseInt(propsRaw['view-distance'] || 10);
+  document.getElementById('prop-view-distance').value = vd;
+  document.getElementById('vd-val').textContent = vd;
+  const sd = parseInt(propsRaw['simulation-distance'] || 10);
+  document.getElementById('prop-sim-distance').value = sd;
+  document.getElementById('sd-val').textContent = sd;
+
+  // Other keys
+  const other = document.getElementById('props-other');
+  other.innerHTML = '';
+  Object.entries(propsRaw).forEach(([k, v]) => {
+    if (knownKeys.includes(k)) return;
+    const row = document.createElement('div'); row.className = 'prop-row';
+    row.innerHTML = `<label class="prop-label" for="oprop-${escHtml(k)}">${escHtml(k)}</label>
+      <input id="oprop-${escHtml(k)}" class="prop-input" value="${escHtml(v)}" data-key="${escHtml(k)}">`;
+    other.appendChild(row);
+  });
+}
+
+async function saveProps() {
+  const { content } = await api('/api/file?path=server.properties');
+  if (!content && content !== '') return;
+  const updates = {
+    'max-players': document.getElementById('prop-max-players').value,
+    'difficulty': document.getElementById('prop-difficulty').value,
+    'gamemode': document.getElementById('prop-gamemode').value,
+    'motd': document.getElementById('prop-motd').value,
+    'pvp': document.getElementById('prop-pvp').checked ? 'true' : 'false',
+    'white-list': document.getElementById('prop-whitelist').checked ? 'true' : 'false',
+    'online-mode': document.getElementById('prop-online-mode').checked ? 'true' : 'false',
+    'view-distance': document.getElementById('prop-view-distance').value,
+    'simulation-distance': document.getElementById('prop-sim-distance').value,
+  };
+  document.querySelectorAll('#props-other [data-key]').forEach(el => {
+    updates[el.dataset.key] = el.value;
+  });
+  const lines = content.split('\n').map(line => {
+    if (line.startsWith('#') || !line.includes('=')) return line;
+    const [k] = line.split('=');
+    const key = k.trim();
+    if (updates[key] !== undefined) { const v = updates[key]; delete updates[key]; return `${key}=${v}`; }
+    return line;
+  });
+  Object.entries(updates).forEach(([k, v]) => lines.push(`${k}=${v}`));
+  const r = await api('/api/file', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ path: 'server.properties', content: lines.join('\n') }) });
+  if (r.ok) { const t = document.getElementById('props-toast'); t.style.display='block'; setTimeout(()=>t.style.display='none',2500); }
+}
+
+// ─── MANAGEMENT ──────────────────────────────────────────────────────────────
+async function loadMgmt(type) {
+  const paths = { whitelist: 'whitelist.json', ops: 'ops.json', banned: 'banned-players.json' };
+  const { content } = await api(`/api/file?path=${paths[type]}`);
+  let data = [];
+  try { data = JSON.parse(content || '[]'); } catch {}
+
+  if (type === 'whitelist') {
+    const tb = document.getElementById('wl-body'); tb.innerHTML = '';
+    data.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><img class="mgmt-avatar" src="https://mc-heads.net/avatar/${p.uuid || p.name}/24"></td>
+        <td>${escHtml(p.name)}</td><td>${escHtml(p.uuid||'')}</td>
+        <td><button class="btn btn-red" style="font-size:11px;padding:2px 6px" onclick="wlRemove('${escHtml(p.name)}')">Remove</button></td>`;
+      tb.appendChild(tr);
+    });
+  } else if (type === 'ops') {
+    const tb = document.getElementById('ops-body'); tb.innerHTML = '';
+    data.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><img class="mgmt-avatar" src="https://mc-heads.net/avatar/${p.uuid||p.name}/24"></td>
+        <td>${escHtml(p.name)}</td><td>${escHtml(p.uuid||'')}</td><td>${p.level||4}</td>
+        <td><button class="btn btn-red" style="font-size:11px;padding:2px 6px" onclick="opsRemove('${escHtml(p.name)}')">Deop</button></td>`;
+      tb.appendChild(tr);
+    });
+  } else if (type === 'banned') {
+    const tb = document.getElementById('banned-body'); tb.innerHTML = '';
+    data.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><img class="mgmt-avatar" src="https://mc-heads.net/avatar/${p.uuid||p.name}/24"></td>
+        <td>${escHtml(p.name)}</td><td>${escHtml(p.uuid||'')}</td>
+        <td>${escHtml(p.reason||'')}</td><td>${escHtml(p.created||'')}</td>
+        <td><button class="btn btn-blue" style="font-size:11px;padding:2px 6px" onclick="pardon('${escHtml(p.name)}')">Unban</button></td>`;
+      tb.appendChild(tr);
+    });
+  }
+}
+
+function switchMgmtTab(tab, btn) {
+  document.querySelectorAll('.mgmt-content').forEach(el => el.classList.remove('active'));
+  document.getElementById(`mgmt-${tab}`).classList.add('active');
+  document.querySelectorAll('.mgmt-subtabs .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadMgmt(tab);
+}
+
+async function mcCmd(cmd) {
+  return api('/api/console', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ command: cmd }) });
+}
+function wlAdd() { const v = document.getElementById('wl-add-input').value.trim(); if(v){mcCmd('whitelist add '+v); setTimeout(()=>loadMgmt('whitelist'),1500);} }
+function wlRemove(n) { mcCmd('whitelist remove '+n); setTimeout(()=>loadMgmt('whitelist'),1500); }
+function opsAdd() { const v = document.getElementById('ops-add-input').value.trim(); if(v){mcCmd('op '+v); setTimeout(()=>loadMgmt('ops'),1500);} }
+function opsRemove(n) { mcCmd('deop '+n); setTimeout(()=>loadMgmt('ops'),1500); }
+function pardon(n) { mcCmd('pardon '+n); setTimeout(()=>loadMgmt('banned'),1500); }
+
+// ─── MODS ────────────────────────────────────────────────────────────────────
+async function searchMods(e) {
+  e.preventDefault();
+  const q = document.getElementById('mod-search-input').value.trim();
+  if (!q) return;
+  const results = document.getElementById('mod-results');
+  results.innerHTML = '<div style="color:var(--text2);font-size:13px">Searching...</div>';
+  const data = await api(`/api/modrinth/search?q=${encodeURIComponent(q)}`);
+  results.innerHTML = '';
+  (data.hits || []).forEach(mod => {
+    const card = document.createElement('div');
+    card.className = 'mod-card';
+    card.innerHTML = `<img class="mod-icon" src="${escHtml(mod.icon_url||'')}" onerror="this.src=''">
+      <div class="mod-info">
+        <div class="mod-name">${escHtml(mod.title)}</div>
+        <div class="mod-desc">${escHtml(mod.description||'')}</div>
+        <div class="mod-meta">⬇ ${(mod.downloads||0).toLocaleString()} · ${escHtml(mod.author||'')} · ${(mod.versions||[]).join(', ').slice(0,40)}</div>
+        <button class="btn btn-blue mod-install-btn" style="font-size:12px;padding:4px 10px" onclick="installMod('${escHtml(mod.project_id)}','${escHtml(mod.title)}',this)">Install</button>
+      </div>`;
+    results.appendChild(card);
+  });
+  if (!(data.hits||[]).length) results.innerHTML = '<div style="color:var(--text2);font-size:13px">No results</div>';
+}
+
+async function installMod(id, name, btn) {
+  btn.disabled = true; btn.textContent = 'Installing...';
+  if (state.status === 'online') {
+    if (!await confirm2(`${name}\nServer is running — mod won't load until next restart. Continue?`)) {
+      btn.disabled = false; btn.textContent = 'Install'; return;
+    }
+  }
+  const r = await api('/api/modrinth/install', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ projectId: id }) });
+  if (r.ok) { toast(`Installed ${name}`); btn.textContent = 'Installed ✓'; loadInstalledMods(); }
+  else { toast('Install failed: ' + (r.error||'')); btn.disabled = false; btn.textContent = 'Install'; }
+}
+
+async function loadInstalledMods() {
+  const mods = await api('/api/mods');
+  const list = document.getElementById('installed-list');
+  list.innerHTML = '';
+  (mods||[]).forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'installed-mod-row';
+    const enabled = m.enabled;
+    const displayName = m.name.replace('.disabled','');
+    row.innerHTML = `<span class="installed-mod-name">🧩 ${escHtml(displayName)}</span>
+      <span class="installed-mod-size">${formatSize(m.size)}</span>
+      <input type="checkbox" class="toggle-sw" ${enabled?'checked':''} title="${enabled?'Enabled':'Disabled'}" onchange="toggleMod('${escHtml(m.name)}',this)">
+      <button class="btn btn-red" style="font-size:11px;padding:2px 6px" onclick="deleteMod('${escHtml(m.name)}')">Delete</button>`;
+    list.appendChild(row);
+  });
+}
+
+async function toggleMod(name, cb) {
+  const r = await api('/api/mods/toggle', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+  if (!r.ok) { cb.checked = !cb.checked; toast('Failed to toggle mod'); }
+  else loadInstalledMods();
+}
+
+async function deleteMod(name) {
+  if (!await confirm2(`Delete mod ${name}?`)) return;
+  await api(`/api/file?path=${encodeURIComponent('mods/' + name)}`, { method: 'DELETE' });
+  loadInstalledMods();
+}
+
+function formatSize(bytes) {
+  if (bytes > 1e6) return (bytes/1e6).toFixed(1) + ' MB';
+  if (bytes > 1e3) return (bytes/1e3).toFixed(0) + ' KB';
+  return bytes + ' B';
+}
+
+// ─── BACKUPS ─────────────────────────────────────────────────────────────────
+async function startBackup() {
+  document.getElementById('backup-progress-wrap').style.display = 'block';
+  document.getElementById('backup-progress-fill').style.width = '0%';
+  document.getElementById('backup-progress-label').textContent = '0%';
+  await api('/api/backup', { method: 'POST' });
+}
+
+async function loadBackups() {
+  const backups = await api('/api/backups');
+  const list = document.getElementById('backup-list');
+  list.innerHTML = '';
+  if (!backups || !backups.length) { list.innerHTML = '<div style="color:var(--text2);font-size:13px">No backups yet</div>'; return; }
+  backups.forEach(b => {
+    const row = document.createElement('div');
+    row.className = 'backup-row';
+    const date = new Date(b.created);
+    row.innerHTML = `<span class="backup-name">${escHtml(b.name)}</span>
+      <span class="backup-size">${formatSize(b.size)}</span>
+      <span class="backup-date">${date.toLocaleDateString()} ${date.toLocaleTimeString()}</span>
+      <a href="/api/backups/${encodeURIComponent(b.name)}/download" class="btn btn-gray" style="font-size:11px;padding:3px 8px">Download</a>
+      <button class="btn btn-red" style="font-size:11px;padding:3px 8px" onclick="deleteBackup('${escHtml(b.name)}')">Delete</button>`;
+    list.appendChild(row);
+  });
+}
+
+async function deleteBackup(name) {
+  if (!await confirm2(`Delete backup ${name}?`)) return;
+  await api(`/api/backups/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  loadBackups();
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
+async function saveSettings() {
+  const cfg = {
+    scheduledRestartEnabled: document.getElementById('sched-enabled').checked,
+    scheduledRestartTime: document.getElementById('sched-time').value,
+    autoBackupOnRestart: document.getElementById('auto-backup-toggle').checked,
+    autoRestart: document.getElementById('auto-restart-toggle').checked
+  };
+  await api('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+  updateNextRestart();
+}
+
+function updateNextRestart() {
+  const enabled = document.getElementById('sched-enabled').checked;
+  const time = document.getElementById('sched-time').value;
+  const label = document.getElementById('next-restart-label');
+  if (!enabled || !time) { label.textContent = 'Scheduled restart: disabled'; return; }
+  const [h, m] = time.split(':').map(Number);
+  const now = new Date();
+  const next = new Date(now); next.setHours(h, m, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  label.textContent = `Next restart: ${next.toLocaleDateString()} at ${time}`;
+}
+
+async function saveConfigField(key, val) {
+  await api('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ [key]: val }) });
+}
+
+function requestNotifPerms() {
+  if ('Notification' in window) {
+    Notification.requestPermission().then(p => toast(`Notification permission: ${p}`));
+  } else toast('Notifications not supported');
+}
+
+// ─── BROWSER NOTIFICATIONS ───────────────────────────────────────────────────
+function fireNotif(event, message) {
+  if (!state.notifSettings[event]) return;
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('MC Panel', { body: message, icon: '/favicon.ico' });
+  }
+}
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tab + '-tab').classList.add('active');
+  const idx = ['console','files','props','mgmt','mods','backups','settings'].indexOf(tab);
+  document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+  if (tab === 'props') loadProps();
+  if (tab === 'mgmt') loadMgmt('whitelist');
+  if (tab === 'mods') loadInstalledMods();
+  if (tab === 'backups') loadBackups();
+  if (tab === 'files') setTimeout(drawGraphs, 100);
+}
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+let modalResolve = null;
+
+function modal(title, body, cancelLabel, onOk, withInput = false) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent = body;
+  const inp = document.getElementById('modal-input');
+  inp.style.display = withInput ? 'block' : 'none';
+  inp.value = '';
+  document.getElementById('modal-cancel-btn').textContent = cancelLabel || 'Cancel';
+  document.getElementById('modal-overlay').classList.add('open');
+  const okBtn = document.getElementById('modal-ok-btn');
+  okBtn.onclick = () => {
+    closeModal();
+    onOk(withInput ? inp.value : true);
+  };
+  if (withInput) setTimeout(() => inp.focus(), 50);
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); if (modalResolve) { modalResolve(false); modalResolve = null; } }
+
+function confirm2(msg) {
+  return new Promise(resolve => {
+    modalResolve = resolve;
+    modal('Confirm', msg, 'Cancel', () => { modalResolve = null; resolve(true); });
+  });
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Resize graphs on window resize
+window.addEventListener('resize', () => {
+  if (document.getElementById('console-tab').classList.contains('active')) drawGraphs();
+});
+
+// Mobile: collapse graphs by default
+if (window.innerWidth < 700) {
+  state.graphsCollapsed = true;
+  document.getElementById('graphs-body').style.display = 'none';
+  document.getElementById('graphs-toggle').textContent = '▶ Expand';
+}
+
+init();
+</script>
+</body>
+</html>
