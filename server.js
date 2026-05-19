@@ -1,6 +1,6 @@
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const MC_DIR = '/home/louis/mc-panel/minecraft';
-const MC_JAR = 'paper-26.1.2-64.jar';
+const MC_JAR = 'paper-1.21.1-133.jar';
 const MC_START_CMD = `java -Xms2G -Xmx6G -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 -jar ${MC_JAR} nogui`;
 const PANEL_PORT = 3000;
 const BACKUP_DIRS = ['world', 'world_nether', 'world_the_end'];
@@ -19,6 +19,7 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const archiver = require('archiver');
 const multer = require('multer');
 const fetch = require('node-fetch');
@@ -29,6 +30,44 @@ const wss = new WebSocket.Server({ server });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+const PANEL_PASSWORD = '6969';
+const sessions = new Map();
+
+function parseCookies(header) {
+  const c = {};
+  if (!header) return c;
+  header.split(';').forEach(p => {
+    const [k, ...v] = p.trim().split('=');
+    c[k.trim()] = v.join('=');
+  });
+  return c;
+}
+
+function authCheck(req) {
+  return sessions.has(parseCookies(req.headers.cookie).session);
+}
+
+app.post('/api/login', (req, res) => {
+  if (req.body.password !== PANEL_PASSWORD) return res.status(401).json({ error: 'Wrong password' });
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, Date.now());
+  res.setHeader('Set-Cookie', `session=${token}; Path=/; HttpOnly; SameSite=Strict`);
+  res.json({ ok: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  sessions.delete(parseCookies(req.headers.cookie).session);
+  res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+  res.json({ ok: true });
+});
+
+app.use('/api', (req, res, next) => {
+  if (req.path === '/login' || req.path === '/logout') return next();
+  if (authCheck(req)) return next();
+  res.status(401).json({ error: 'Unauthorized' });
+});
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let mcProcess = null;
@@ -80,8 +119,8 @@ function broadcast(obj) {
   wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(msg); });
 }
 
-wss.on('connection', ws => {
-  // Send current state to new client
+wss.on('connection', (ws, req) => {
+  if (!authCheck(req)) { ws.close(1008, 'Unauthorized'); return; }
   ws.send(JSON.stringify({ type: 'status', status: serverStatus }));
   ws.send(JSON.stringify({ type: 'players', players: [...onlinePlayers] }));
   if (currentTps !== null) ws.send(JSON.stringify({ type: 'tps', value: currentTps }));
@@ -150,9 +189,9 @@ function startServer() {
   broadcast({ type: 'log', data: '[PANEL] Starting server...\n' });
 
   const args = MC_START_CMD.split(' ');
-  const cmd = args.shift();
+  args.shift(); // remove 'java' placeholder
 
-  mcProcess = spawn(cmd, args, { cwd: MC_DIR, env: { ...process.env, PATH: process.env.PATH + ':/usr/bin:/usr/local/bin' } });
+  mcProcess = spawn('/usr/bin/java', args, { cwd: MC_DIR, env: { ...process.env, PATH: process.env.PATH + ':/usr/bin:/usr/local/bin' } });
 
   mcProcess.stdout.on('data', data => {
     const text = data.toString();
@@ -223,7 +262,7 @@ function stopServer() {
   return new Promise(resolve => {
     if (!mcProcess) { resolve(); return; }
     cleanStop = true;
-    setStatus('starting'); // reuse "starting" color as "stopping" indicator
+    setStatus('stopping');
     broadcast({ type: 'log', data: '[PANEL] Stopping server...\n' });
     try { mcProcess.stdin.write('stop\n'); } catch {}
     const timer = setTimeout(() => {
@@ -666,7 +705,7 @@ app.post('/api/modrinth/install', async (req, res) => {
   const { projectId } = req.body;
   if (!projectId) return res.status(400).json({ error: 'No projectId' });
   try {
-    const vr = await fetch(`https://api.modrinth.com/v2/project/${projectId}/version?loaders=[%22paper%22,%22spigot%22,%22bukkit%22]&game_versions=[%221.20.4%22]`);
+    const vr = await fetch(`https://api.modrinth.com/v2/project/${projectId}/version?loaders=[%22paper%22,%22spigot%22,%22bukkit%22]&game_versions=[%221.21.1%22]`);
     let versions = await vr.json();
     if (!Array.isArray(versions) || !versions.length) {
       // fallback: get all versions and take latest

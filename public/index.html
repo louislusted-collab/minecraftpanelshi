@@ -29,6 +29,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .badge.online{background:#1a3a1a;color:var(--green)}
 .badge.offline{background:#2a1a1a;color:var(--red)}
 .badge.starting{background:#2a2a1a;color:var(--yellow)}
+.badge.stopping{background:#1a2a3a;color:var(--blue)}
 .badge.crashed{background:#2a1a0a;color:var(--orange)}
 .btn{padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:opacity 0.15s}
 .btn:hover{opacity:0.85}.btn:disabled{opacity:0.4;cursor:not-allowed}
@@ -251,6 +252,14 @@ canvas.graph{width:100%;height:60px;display:block;background:var(--bg3);border-r
 #toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;z-index:2000;opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none}
 #toast.show{opacity:1;transform:translateY(0)}
 
+/* LOGIN OVERLAY */
+#login-overlay{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
+#login-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:36px 32px;min-width:300px;text-align:center}
+#login-box h1{font-size:22px;font-weight:700;margin-bottom:6px}
+#login-box p{font-size:13px;color:var(--text2);margin-bottom:22px}
+#login-pw{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;margin-bottom:12px}
+#login-pw:focus{outline:none;border-color:var(--blue)}
+#login-error{color:var(--red);font-size:13px;margin-top:10px;display:none}
 /* MOBILE */
 @media(max-width:700px){
   #topbar{gap:5px;padding:6px 8px}
@@ -268,6 +277,16 @@ canvas.graph{width:100%;height:60px;display:block;background:var(--bg3);border-r
 </style>
 </head>
 <body>
+
+<div id="login-overlay">
+  <div id="login-box">
+    <h1>⛏ MC Panel</h1>
+    <p>Enter password to continue</p>
+    <input id="login-pw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn btn-blue" onclick="doLogin()" style="width:100%;padding:9px;font-size:14px">Login</button>
+    <div id="login-error">Wrong password</div>
+  </div>
+</div>
 
 <div id="app">
 <!-- TOP BAR -->
@@ -290,6 +309,7 @@ canvas.graph{width:100%;height:60px;display:block;background:var(--bg3);border-r
     <span class="dot red" id="playit-dot"></span>
     <span id="playit-addr">playit.gg</span>
   </div>
+  <button class="btn btn-gray" onclick="doLogout()" style="font-size:12px;padding:4px 8px">Logout</button>
 </div>
 
 <!-- TABS -->
@@ -555,39 +575,51 @@ const graphs = { cpu: [], ram: [], tps: [] };
 let cmEditor = null;
 
 // ─── WEBSOCKET ───────────────────────────────────────────────────────────────
-const ws = new WebSocket(`ws://${location.host}`);
-ws.onmessage = e => {
-  const msg = JSON.parse(e.data);
-  switch (msg.type) {
-    case 'log': appendLog(msg.data); break;
-    case 'status': updateStatus(msg.status); break;
-    case 'crashed':
-      updateStatus('crashed');
-      appendLog(`[PANEL] Server crashed (exit code ${msg.exitCode}). ${msg.restarting ? 'Restarting in 10 seconds...' : ''}\n`, 'error');
-      fireNotif('crash', `Server crashed — ${msg.restarting ? 'auto-restarting in 10 seconds.' : 'auto-restart is disabled.'}`);
-      break;
-    case 'players': updatePlayers(msg.players); break;
-    case 'tps': updateTps(msg.value); break;
-    case 'stats': updateStats(msg); break;
-    case 'backup_progress':
-      document.getElementById('backup-progress-wrap').style.display = 'block';
-      document.getElementById('backup-progress-fill').style.width = msg.percent + '%';
-      document.getElementById('backup-progress-label').textContent = msg.percent + '%';
-      break;
-    case 'backup_done':
-      document.getElementById('backup-progress-fill').style.width = '100%';
-      document.getElementById('backup-progress-label').textContent = 'Done!';
-      setTimeout(() => document.getElementById('backup-progress-wrap').style.display = 'none', 3000);
-      loadBackups();
-      break;
-    case 'playit': updatePlayit(msg); break;
-    case 'notification': fireNotif(msg.event, msg.message); break;
-  }
-};
-ws.onclose = () => appendLog('[PANEL] WebSocket disconnected. Reload to reconnect.\n', 'error');
+let ws = null;
+
+function connectWs() {
+  ws = new WebSocket(`ws://${location.host}`);
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    switch (msg.type) {
+      case 'log': appendLog(msg.data); break;
+      case 'status': updateStatus(msg.status); break;
+      case 'crashed':
+        updateStatus('crashed');
+        appendLog(`[PANEL] Server crashed (exit code ${msg.exitCode}). ${msg.restarting ? 'Restarting in 10 seconds...' : ''}\n`, 'error');
+        fireNotif('crash', `Server crashed — ${msg.restarting ? 'auto-restarting in 10 seconds.' : 'auto-restart is disabled.'}`);
+        break;
+      case 'players': updatePlayers(msg.players); break;
+      case 'tps': updateTps(msg.value); break;
+      case 'stats': updateStats(msg); break;
+      case 'backup_progress':
+        document.getElementById('backup-progress-wrap').style.display = 'block';
+        document.getElementById('backup-progress-fill').style.width = msg.percent + '%';
+        document.getElementById('backup-progress-label').textContent = msg.percent + '%';
+        break;
+      case 'backup_done':
+        document.getElementById('backup-progress-fill').style.width = '100%';
+        document.getElementById('backup-progress-label').textContent = 'Done!';
+        setTimeout(() => document.getElementById('backup-progress-wrap').style.display = 'none', 3000);
+        loadBackups();
+        break;
+      case 'playit': updatePlayit(msg); break;
+      case 'notification': fireNotif(msg.event, msg.message); break;
+    }
+  };
+  ws.onclose = e => {
+    if (e.code === 1008) {
+      document.getElementById('login-overlay').style.display = 'flex';
+      document.getElementById('login-pw').focus();
+      return;
+    }
+    appendLog('[PANEL] WebSocket disconnected. Reload to reconnect.\n', 'error');
+  };
+}
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 async function init() {
+  connectWs();
   // Load config
   const cfg = await api('/api/config');
   state.config = cfg;
@@ -655,6 +687,7 @@ async function init() {
 // ─── API HELPER ──────────────────────────────────────────────────────────────
 async function api(url, opts = {}) {
   const r = await fetch(url, opts);
+  if (r.status === 401) { location.reload(); return {}; }
   return r.json().catch(() => ({}));
 }
 
@@ -663,11 +696,11 @@ function updateStatus(s) {
   state.status = s;
   const badge = document.getElementById('status-badge');
   badge.className = `badge ${s}`;
-  const labels = { online:'Online', offline:'Offline', starting:'Starting...', crashed:'Crashed' };
+  const labels = { online:'Online', offline:'Offline', starting:'Starting...', stopping:'Stopping...', crashed:'Crashed' };
   badge.textContent = labels[s] || s;
-  document.getElementById('start-btn').disabled = s === 'online' || s === 'starting';
-  document.getElementById('stop-btn').disabled = s === 'offline';
-  document.getElementById('restart-btn').disabled = s === 'offline';
+  document.getElementById('start-btn').disabled = s === 'online' || s === 'starting' || s === 'stopping';
+  document.getElementById('stop-btn').disabled = s === 'offline' || s === 'stopping';
+  document.getElementById('restart-btn').disabled = s === 'offline' || s === 'stopping';
   if (s === 'offline' || s === 'crashed') {
     document.getElementById('player-count').textContent = '0/? players';
   }
@@ -1423,7 +1456,7 @@ async function toggleMod(name, cb) {
 
 async function deleteMod(name) {
   if (!await confirm2(`Delete mod ${name}?`)) return;
-  await api(`/api/file?path=${encodeURIComponent('mods/' + name)}`, { method: 'DELETE' });
+  await api(`/api/file?path=${encodeURIComponent('plugins/' + name)}`, { method: 'DELETE' });
   loadInstalledMods();
 }
 
@@ -1534,7 +1567,8 @@ function modal(title, body, cancelLabel, onOk, withInput = false) {
   document.getElementById('modal-overlay').classList.add('open');
   const okBtn = document.getElementById('modal-ok-btn');
   okBtn.onclick = () => {
-    closeModal();
+    modalResolve = null;
+    document.getElementById('modal-overlay').classList.remove('open');
     onOk(withInput ? inp.value : true);
   };
   if (withInput) setTimeout(() => inp.focus(), 50);
@@ -1576,7 +1610,36 @@ if (window.innerWidth < 700) {
   document.getElementById('graphs-toggle').textContent = '▶ Expand';
 }
 
-init();
+// ─── LOGIN ───────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const pw = document.getElementById('login-pw').value;
+  const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+  if (r.ok) {
+    document.getElementById('login-overlay').style.display = 'none';
+    init();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('login-pw').value = '';
+    document.getElementById('login-pw').focus();
+  }
+}
+
+async function doLogout() {
+  await fetch('/api/logout', { method: 'POST' });
+  location.reload();
+}
+
+// ─── STARTUP AUTH CHECK ──────────────────────────────────────────────────────
+(async () => {
+  const r = await fetch('/api/config').catch(() => null);
+  if (!r || r.status === 401) {
+    document.getElementById('login-overlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('login-pw').focus(), 50);
+  } else {
+    document.getElementById('login-overlay').style.display = 'none';
+    init();
+  }
+})();
 </script>
 </body>
 </html>
