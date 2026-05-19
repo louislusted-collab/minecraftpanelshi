@@ -321,6 +321,7 @@ canvas.graph{width:100%;height:60px;display:block;background:var(--bg3);border-r
   <button class="tab-btn" onclick="switchTab('mods')">Mods</button>
   <button class="tab-btn" onclick="switchTab('backups')">Backups</button>
   <button class="tab-btn" onclick="switchTab('settings')">Settings</button>
+  <button class="tab-btn" onclick="switchTab('terminal')">Terminal</button>
 </div>
 
 <div id="content">
@@ -520,6 +521,16 @@ canvas.graph{width:100%;height:60px;display:block;background:var(--bg3);border-r
     <div class="setting-row"><div class="setting-label">TPS lag alert</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="lag" checked></div>
     <div class="setting-row"><div class="setting-label">Tunnel disconnect</div><input type="checkbox" class="toggle-sw notif-toggle" data-event="tunnel_down" checked></div>
     <button class="btn btn-gray" style="margin-top:10px;font-size:12px" onclick="requestNotifPerms()">Test / Request Permission</button>
+  </div>
+</div>
+
+<!-- TERMINAL TAB -->
+<div id="terminal-tab" class="tab-panel" style="flex-direction:column;background:#0d0d0d">
+  <div id="terminal-output" style="flex:1;overflow-y:auto;padding:10px;font-family:monospace;font-size:13px;color:#e0e0e0;white-space:pre-wrap;word-break:break-all"></div>
+  <div style="display:flex;gap:6px;padding:8px;background:#1a1a1a;border-top:1px solid #333">
+    <span style="color:#4ec9b0;font-family:monospace;font-size:13px;line-height:32px">$</span>
+    <input id="terminal-input" type="text" placeholder="enter command..." style="flex:1;background:#111;border:1px solid #333;color:#e0e0e0;padding:6px 10px;border-radius:4px;font-family:monospace;font-size:13px" onkeydown="if(event.key==='Enter')runTerminalCmd()">
+    <button class="btn btn-blue" onclick="runTerminalCmd()">Run</button>
   </div>
 </div>
 
@@ -1627,6 +1638,36 @@ async function doLogin() {
 async function doLogout() {
   await fetch('/api/logout', { method: 'POST' });
   location.reload();
+}
+
+// ─── TERMINAL ────────────────────────────────────────────────────────────────
+const termHistory = [];
+let termHistIdx = -1;
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('terminal-input').addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (termHistIdx < termHistory.length - 1) { termHistIdx++; e.target.value = termHistory[termHistory.length - 1 - termHistIdx]; } }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (termHistIdx > 0) { termHistIdx--; e.target.value = termHistory[termHistory.length - 1 - termHistIdx]; } else { termHistIdx = -1; e.target.value = ''; } }
+  });
+});
+
+async function runTerminalCmd() {
+  const input = document.getElementById('terminal-input');
+  const out = document.getElementById('terminal-output');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  termHistory.push(cmd);
+  termHistIdx = -1;
+  input.value = '';
+  out.innerHTML += `<span style="color:#4ec9b0">$ ${escHtml(cmd)}</span>\n`;
+  try {
+    const r = await fetch('/api/terminal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: cmd }) });
+    const d = await r.json();
+    if (d.stdout) out.innerHTML += escHtml(d.stdout);
+    if (d.stderr) out.innerHTML += `<span style="color:#f48771">${escHtml(d.stderr)}</span>`;
+    if (!d.stdout && !d.stderr) out.innerHTML += `<span style="color:#888">(no output)</span>\n`;
+  } catch(e) { out.innerHTML += `<span style="color:#f48771">Error: ${escHtml(e.message)}</span>\n`; }
+  out.scrollTop = out.scrollHeight;
 }
 
 // ─── STARTUP AUTH CHECK ──────────────────────────────────────────────────────

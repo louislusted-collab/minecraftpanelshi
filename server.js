@@ -769,6 +769,15 @@ app.post('/api/mods/toggle', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── TERMINAL ────────────────────────────────────────────────────────────────
+app.post('/api/terminal', async (req, res) => {
+  const { command } = req.body;
+  if (!command || typeof command !== 'string') return res.status(400).json({ error: 'No command' });
+  exec(command, { cwd: os.homedir(), timeout: 30000 }, (err, stdout, stderr) => {
+    res.json({ stdout: stdout || '', stderr: stderr || '', exitCode: err ? err.code ?? 1 : 0 });
+  });
+});
+
 // ─── START ───────────────────────────────────────────────────────────────────
 server.listen(PANEL_PORT, () => {
   console.log(`MC Panel running at http://localhost:${PANEL_PORT}`);
