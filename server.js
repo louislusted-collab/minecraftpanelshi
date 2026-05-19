@@ -191,7 +191,14 @@ function startServer() {
   const args = MC_START_CMD.split(' ');
   args.shift(); // remove 'java' placeholder
 
-  mcProcess = spawn('/usr/bin/java', args, { cwd: MC_DIR, env: { ...process.env, PATH: process.env.PATH + ':/usr/bin:/usr/local/bin' } });
+  const javaCandidates = ['/usr/bin/java','/usr/sbin/java','/usr/local/bin/java',
+    '/usr/lib/jvm/java-21-openjdk/bin/java','/usr/lib/jvm/java-21/bin/java',
+    '/usr/lib/jvm/java-17-openjdk/bin/java','/usr/lib/jvm/java-17/bin/java',
+    '/usr/lib/jvm/temurin-21/bin/java'];
+  const javaPath = javaCandidates.find(p => { try { return fs.statSync(p).isFile(); } catch { return false; } }) || 'java';
+  broadcast({ type: 'log', data: `[PANEL] Using java: ${javaPath}\n` });
+
+  mcProcess = spawn(javaPath, args, { cwd: MC_DIR, env: { ...process.env, PATH: process.env.PATH + ':/usr/bin:/usr/sbin:/usr/local/bin' } });
 
   mcProcess.stdout.on('data', data => {
     const text = data.toString();
